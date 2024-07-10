@@ -7,6 +7,17 @@ app = Flask(__name__)
 
 app.secret_key = '1_@Ma8vU!_qRb_*A'
 
+# create a python logger
+import logging
+from logging.handlers import RotatingFileHandler
+# create a logger
+handler = RotatingFileHandler('error.log', maxBytes=10000, backupCount=1)
+handler.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]')
+handler.setFormatter(formatter)
+app.logger.addHandler(handler)
+app.logger.setLevel(logging.DEBUG)
+
 @app.route('/')
 def home():
     # here we check wether we have anyone logged in 
@@ -54,8 +65,13 @@ def signin():
         cursor.execute(sql,(email,password))
 
         if cursor.rowcount == 0:
+            app.logger.error(f'Failed login for email: {email}')
+
             return render_template('signin.html',error='wrong credentials')
         else:
+
+            app.logger.info(f'Success login for : {email}')
+            
             user = cursor.fetchone()
             # capture the role
             role = user[3]
@@ -80,7 +96,7 @@ def add():
         # we check if the loggedin user is a user not admin
         role = session['userrole']
 
-        if role == 'User':
+        if role == 'User or Admin':
             if request.method == 'POST':
                 message_title = request.form['message_title']
                 message_body = request.form['message_body']
@@ -98,5 +114,28 @@ def add():
             return render_template('signin.html', message = 'Access Denied, login as a User')
     else:
         return redirect('/signin')
+
+# view messages as admin
+@app.route('/view')
+def view():
+    #  is anyuser logged in?
+    if 'userrole' in session:
+        # we check if the loggedin user is a admin not user
+        role = session['userrole']
+        if role == 'Admin':
+            # connect to databse
+            connection = pymysql.connect(host='localhost',user='root',password='',database='cybertestsystem')
+            # cursor
+            cursor = connection.cursor()
+            sql = 'select * from messages'
+            cursor.execute(sql)
+            messages = cursor.fetchall()
+            return render_template('view.html', messages = messages)
+        else:
+            return render_template('signin.html', message = 'Access Denied, login as a Admin')
+    else:
+        return redirect('/signin')
+
+
 
 app.run(debug=True)
